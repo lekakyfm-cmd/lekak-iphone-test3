@@ -1,0 +1,12 @@
+{
+  "engine_revision": "0d78202729967a5bbdbc886aa128e48e82bef7ac",
+  "ios_target_present": false,
+  "stored_pointers": "__ptr32 __uptr",
+  "guest_ram_address": "0x80000000",
+  "guest_scratchpad_address": "0x9F800000",
+  "android_native_code_base": "0xC0000000",
+  "runtime_code_changes": true,
+  "built_ios_app": false,
+  "tested_on_iphone": false,
+  "next_step": "Run the macOS workflow and install the diagnostic IPA on the intended iPhone; inspect memory and compiler results before porting the full engine."
+}
