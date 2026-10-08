@@ -10,6 +10,9 @@ audit=json.loads((root/'engine-audit.json').read_text())
 assert not audit['built_ios_app'] and not audit['tested_on_iphone']
 main=(root/'App/main.m').read_text()
 assert 'MAP_FIXED,' not in main and 'mprotect(' not in main
+assert 'UIDocumentPickerDelegate' in main and 'LekakDisc_Load' in main
+assert 'game_memory_routines' in main
+assert info['CFBundleVersion']=='5'
 assert 'CheckEngine' in main and 'engine_core' in main
 assert 'CheckTranslation' in main and 'address_adapter' in main
 assert 'native_function_fits_32bits' in main and 'UIApplicationMain' in main

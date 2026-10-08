@@ -3,12 +3,14 @@
 from pathlib import Path
 import os,subprocess,tempfile
 ROOT=Path(__file__).resolve().parents[1]
-SOURCES=['App/engine_callbacks.c','App/optional_textures.c','Engine/src/pc/memory.c',
+SOURCES=['App/disc_loader.c','App/game_memory.c','App/engine_callbacks.c','App/optional_textures.c','Engine/src/pc/memory.c',
  'Engine/src/pc/rng.c','Engine/src/pc/compat/libgs_ot.c','Engine/src/pc/compat/gte.c',
  'Engine/src/pc/compat/pgxp.c','Engine/src/pc/render/packets.c','Engine/src/pc/render/soft_gpu.c']
 with tempfile.TemporaryDirectory(prefix='lekak-engine-') as tmp:
  for name,unit,extra in [
   ('bridge','tools/test_engine_bridge.c',['App/engine_bridge.c']),
+  ('disc-loader','tools/test_disc_loader.c',[]),
+  ('game-memory','tools/test_game_memory.c',[]),
   ('ordering-table','Engine/tests/libgs_ot_test.c',[]),
   ('packets','Engine/tests/packet_test.c',[]),
   ('software-gpu','Engine/tests/soft_gpu_test.c',[])]:

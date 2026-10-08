@@ -1,0 +1,16 @@
+{
+  "revision": "0d78202729967a5bbdbc886aa128e48e82bef7ac",
+  "repository": "https://github.com/Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled",
+  "notice": "Upstream MIT PC-port license does not cover decompiled game routines. Translated routines preserve algorithm and guest layout with bounds checks; not a full game port.",
+  "adapted": [
+    {
+      "original": "src/game/util_memory.c",
+      "original_sha256": "b1c9c946a373de64018a7eaf0f9623ddf46355f4356803553e698db169d249d3"
+    },
+    {
+      "original": "src/game/util_compare_s16.c",
+      "original_sha256": "00e622c876a808b2a451e70b5870a83c8fa4a2c55355105c347f1e7098f35efd"
+    }
+  ],
+  "disc_loader": "New streaming reader based on ISO9660 and the PS-X EXE header; requires user-owned USA disc. No game data supplied."
+}

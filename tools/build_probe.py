@@ -48,7 +48,7 @@ def build():
     (app/'Info.plist').write_bytes(plistlib.dumps(info))
     shutil.copy2(destination/'compiler-check.json',app/'compiler-check.json')
     sources=[str(ROOT/p) for p in [
-        'App/engine_bridge.c','App/engine_callbacks.c','App/optional_textures.c','Engine/src/pc/memory.c',
+        'App/engine_bridge.c','App/disc_loader.c','App/game_memory.c','App/engine_callbacks.c','App/optional_textures.c','Engine/src/pc/memory.c',
         'Engine/src/pc/rng.c','Engine/src/pc/compat/libgs_ot.c','Engine/src/pc/compat/gte.c',
         'Engine/src/pc/compat/pgxp.c','Engine/src/pc/render/packets.c','Engine/src/pc/render/soft_gpu.c']]
     objects=[]
@@ -60,7 +60,7 @@ def build():
             raise SystemExit('Engine component compile failed: '+source+'\n'+compiled.stdout)
         objects.append(str(obj))
     command=[cc,*flags,'-fobjc-arc','-fblocks','-O2','-Wall','-Wextra',str(ROOT/'App/main.m'),*objects,
-             '-framework','UIKit','-framework','Foundation','-framework','CoreGraphics','-o',str(app/'LekakProbe')]
+             '-framework','UIKit','-framework','Foundation','-framework','CoreGraphics','-framework','UniformTypeIdentifiers','-o',str(app/'LekakProbe')]
     built=run(command)
     (destination/'build-log.txt').write_text(built.stdout)
     if built.returncode:raise SystemExit('The diagnostic app did not compile:\n'+built.stdout)

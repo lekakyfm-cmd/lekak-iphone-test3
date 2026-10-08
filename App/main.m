@@ -6,6 +6,11 @@
 #import <string.h>
 #import "address_adapter.h"
 #import "engine_bridge.h"
+#import "disc_loader.h"
+#import "game_memory.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#import <stdlib.h>
+#import <dispatch/dispatch.h>
 
 /* This is a device compatibility probe, not the Lekak game. No ROM data,
  * dynamic executable allocation, code patching, or MAP_FIXED is used. */
@@ -105,75 +110,140 @@ static NSDictionary *CompilerCheck(void) {
     return [json isKindOfClass:[NSDictionary class]] ? json : @{@"supported": @NO, @"status": @"missing build result"};
 }
 
-@interface ProbeController : UIViewController
-@property(nonatomic, strong) NSDictionary *report;
+static NSDictionary *CheckGameMemory(void) {
+    MemoriesMemory *memory = calloc(1, sizeof(*memory));
+    if (!memory) return @{@"passed": @NO};
+    memory->ram[0x100] = 0xFE; memory->ram[0x101] = 0xFF;
+    memory->ram[0x104] = 1;
+    int answer = 9;
+    BOOL compare = Lekak_CompareS16(memory, 0x80000100, 0x80000104, &answer) && answer == -1;
+    BOOL copy = Lekak_CopyWords(memory, 0x80000200, 0x80000100, 3) &&
+        !memcmp(memory->ram+0x200, memory->ram+0x100, 4);
+    BOOL fill = Lekak_FillMemory(memory, 0x80000300, 0x1AB, 5) &&
+        memory->ram[0x300] == 0xAB && memory->ram[0x307] == 0xAB && memory->ram[0x308] == 0;
+    BOOL bounds = !Lekak_CopyWords(memory, 0x801FFFFC, 0x80000100, 5) &&
+        !Lekak_FillMemory(memory, 0x80000001, 0, 4);
+    free(memory);
+    return @{@"passed": @(compare && copy && fill && bounds), @"compare_s16": @(compare),
+        @"copy_words": @(copy), @"fill_memory": @(fill), @"bounds_rejection": @(bounds),
+        @"scope": @"Three adapted game utility routines; full game still not converted."};
+}
+
+@interface ProbeController : UIViewController <UIDocumentPickerDelegate> {
+    MemoriesMemory *_discMemory;
+}
+@property(nonatomic, strong) NSMutableDictionary *report;
+@property(nonatomic, strong) UITextView *textView;
+@property(nonatomic, strong) UIBarButtonItem *chooseButton;
 @end
 
 @implementation ProbeController
+- (void)dealloc { free(_discMemory); }
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = UIColor.systemBackgroundColor;
-    self.title = @"Lekak — moteur 4";
+    self.title = @"Lekak — BIN 5";
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
         initWithTitle:@"Partager" style:UIBarButtonItemStylePlain target:self action:@selector(shareReport:)];
-    NSArray *mappings = @[CheckMapping(0x80000000u, 0x200000u),
-                           CheckMapping(0x9F800000u, (size_t)sysconf(_SC_PAGESIZE)),
-                           CheckMapping(0xC0000000u, (size_t)sysconf(_SC_PAGESIZE))];
-    NSDictionary *translation = CheckTranslation();
-    NSDictionary *engine = CheckEngine();
+    self.chooseButton = [[UIBarButtonItem alloc] initWithTitle:@"Choisir BIN"
+        style:UIBarButtonItemStylePlain target:self action:@selector(chooseDisc:)];
+    self.navigationItem.leftBarButtonItem = self.chooseButton;
+    NSDictionary *engine = CheckEngine(), *routines = CheckGameMemory();
     uintptr_t function = (uintptr_t)&CheckMapping;
-    self.report = @{@"probe_version": @4, @"is_game": @NO,
+    self.report = [@{@"probe_version": @5, @"is_game": @NO,
         @"system_version": UIDevice.currentDevice.systemVersion,
         @"device_model": UIDevice.currentDevice.model,
         @"native_pointer_bytes": @(sizeof(void *)),
         @"native_function_address": [NSString stringWithFormat:@"0x%llX", (unsigned long long)function],
         @"native_function_fits_32bits": @(function <= UINT32_MAX),
-        @"engine_core": engine, @"address_adapter": translation, @"compiler": CompilerCheck(), @"memory_tests": mappings,
-        @"runtime_code_patching": @"Not attempted. The engine needs static dispatch on iOS.",
-        @"scope": @"Compatibility diagnostics only. No game engine or disc included."};
-    NSMutableString *text = [NSMutableString stringWithString:
-        @"QUATRIEME ESSAI iOS — COMPOSANTS DU MOTEUR\n\nCette application vérifie les obstacles au portage. Elle ne lance pas encore le jeu.\n\n"];
-    [text appendFormat:@"iOS : %@\nPointeurs natifs : %zu octets\nCompilateur compatible avec les pointeurs 32 bits : %@\n\n",
-        UIDevice.currentDevice.systemVersion, sizeof(void *),
-        [CompilerCheck()[@"supported"] boolValue] ? @"oui" : @"non"];
-    [text appendFormat:@"Composants du moteur : %@\nRendu GPU : %@\nMemoire RAM et miroirs : %@\nGeometrie GTE : %@\nGenerateur aleatoire : %@\nEmpreinte image : %@\n\n",
-        [engine[@"passed"] boolValue] ? @"OK" : @"ECHEC",
-        [engine[@"software_gpu_pixels"] boolValue] ? @"OK" : @"ECHEC",
-        [engine[@"ram_aliases"] boolValue] ? @"OK" : @"ECHEC",
-        [engine[@"gte_register_roundtrip"] boolValue] ? @"OK" : @"ECHEC",
-        [engine[@"rng"] boolValue] ? @"OK" : @"ECHEC", engine[@"framebuffer_hash"]];
-    [text appendString:@"Le rendu ci-dessous vient du GPU logiciel du moteur. Les trois rectangles sont des commandes de test, pas un ecran du jeu. La boucle de jeu et les hooks Lekak restent a convertir.\n\n"];
-    [text appendFormat:@"Adaptation des adresses : %@\nMemoire traduite : %@\nAppels de fonctions : %@\nControle des limites : %@\n\n",
-        [translation[@"passed"] boolValue] ? @"REUSSIE" : @"ECHEC",
-        [translation[@"translated_memory_roundtrip"] boolValue] ? @"OK" : @"ECHEC",
-        [translation[@"static_callback_dispatch"] boolValue] ? @"OK" : @"ECHEC",
-        [translation[@"bounds_rejection"] boolValue] ? @"OK" : @"ECHEC"];
-    [text appendString:@"Ce prototype traduit explicitement les adresses du jeu et utilise une table de fonctions. Il faut encore convertir les acces du moteur avant de lancer le jeu.\n\n"];
-    for (NSDictionary *entry in mappings) {
-        [text appendFormat:@"Adresse %@ : %@\nAdresse obtenue : %@\n\n",
-            entry[@"requested"], [entry[@"exact"] boolValue] ? @"disponible" : @"non obtenue par ce test",
-            entry[@"returned"]];
-    }
-    [text appendString:@"Une adresse non obtenue indique que la stratégie actuelle doit être adaptée ; ce test ne prouve pas que tous les autres modes de mapping sont impossibles.\n\nPartager le rapport permet d’analyser le résultat. Aucun compte, identifiant personnel ou fichier du téléphone n’est lu.\n\nENGLISH\nThis is a compatibility probe, not the game. It checks the compiler's 32-bit stored-pointer support and safely requests the engine's low memory addresses without overwriting existing mappings. A failed hint allocation does not prove that every alternative mapping strategy is impossible.\n"];
-    UITextView *view = [UITextView new];
-    view.translatesAutoresizingMaskIntoConstraints = NO;
-    view.editable = NO;
-    view.font = [UIFont systemFontOfSize:16];
-    NSMutableAttributedString *content = [[NSMutableAttributedString alloc] initWithString:text
-        attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:16], NSForegroundColorAttributeName: UIColor.labelColor}];
-    NSTextAttachment *preview = [NSTextAttachment new];
-    preview.image = EnginePreview();
-    preview.bounds = CGRectMake(0, 0, 280, 210);
-    [content appendAttributedString:[NSAttributedString attributedStringWithAttachment:preview]];
-    [content appendAttributedString:[[NSAttributedString alloc] initWithString:@"\nRendu du moteur — fixture de test\n"]];
-    view.attributedText = content;
-    view.textContainerInset = UIEdgeInsetsMake(18, 18, 24, 18);
-    [self.view addSubview:view];
+        @"engine_core": engine, @"game_memory_routines": routines,
+        @"address_adapter": CheckTranslation(), @"compiler": CompilerCheck(),
+        @"memory_tests": @[CheckMapping(0x80000000u,0x200000u)],
+        @"disc_loader": @{@"status": @"not_selected", @"executed": @NO},
+        @"runtime_code_patching": @"Not attempted; static dispatch required.",
+        @"scope": @"Portable engine subset, three game utilities and disc loader. No game execution or Lekak hooks yet."} mutableCopy];
+    self.textView = [UITextView new];
+    self.textView.translatesAutoresizingMaskIntoConstraints = NO;
+    self.textView.editable = NO;
+    self.textView.textContainerInset = UIEdgeInsetsMake(18,18,24,18);
+    [self.view addSubview:self.textView];
     [NSLayoutConstraint activateConstraints:@[
-        [view.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
-        [view.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],
-        [view.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-        [view.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]]];
+        [self.textView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
+        [self.textView.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],
+        [self.textView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [self.textView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]]];
+    [self refreshText];
+}
+- (void)refreshText {
+    NSDictionary *engine = self.report[@"engine_core"], *disc = self.report[@"disc_loader"];
+    NSMutableString *text = [NSMutableString stringWithFormat:
+        @"CHARGEMENT DU DISQUE — ESSAI 5\n\nLe jeu ne démarre pas encore. Cette version charge son exécutable dans la mémoire adaptée à l’iPhone.\n\nMoteur graphique : %@\nEmpreinte image : %@\nRoutines mémoire du jeu : %@\n\n",
+        [engine[@"passed"] boolValue] ? @"OK" : @"ECHEC", engine[@"framebuffer_hash"],
+        [self.report[@"game_memory_routines"][@"passed"] boolValue] ? @"OK" : @"ECHEC"];
+    if ([disc[@"loaded"] boolValue]) {
+        [text appendFormat:@"BIN chargé : OK\nExécutable : SLUS_014.11\nDonnées chargées : %@ octets\nAdresse mémoire : %@\nPoint d’entrée : %@\nEmpreinte : %@\n\nL’exécutable est conservé en RAM. Aucun code du disque n’est exécuté dans cet essai.\n", disc[@"load_bytes"],disc[@"load_address"],disc[@"entry"],disc[@"payload_hash"]];
+    } else if (disc[@"error"]) {
+        [text appendFormat:@"Chargement impossible : %@\n\n",disc[@"error"]];
+    } else if ([disc[@"status"] isEqual:@"loading"]) {
+        [text appendString:@"Lecture du BIN en cours…\n\n"];
+    } else {
+        [text appendString:@"Appuie sur « Choisir BIN » et sélectionne le fichier BIN USA depuis Fichiers. Si le fichier est sur iCloud, son téléchargement peut prendre du temps.\n\n"];
+    }
+    [text appendString:@"Puis utilise « Partager » pour envoyer le rapport JSON. Le rapport contient seulement le résultat du test, pas ton BIN.\n\nENGLISH\nChoose your own USA BIN (MODE2/2352) or ISO (2048). This test loads and validates the PS-X executable in translated RAM but does not run the game. Share the JSON report after loading. No disc data is included in the report.\n\nRendu de test du moteur :\n"];
+    NSMutableAttributedString *content = [[NSMutableAttributedString alloc] initWithString:text
+        attributes:@{NSFontAttributeName:[UIFont systemFontOfSize:16],NSForegroundColorAttributeName:UIColor.labelColor}];
+    NSTextAttachment *preview = [NSTextAttachment new]; preview.image = EnginePreview();
+    preview.bounds = CGRectMake(0,0,280,210);
+    [content appendAttributedString:[NSAttributedString attributedStringWithAttachment:preview]];
+    self.textView.attributedText = content;
+}
+- (void)chooseDisc:(UIBarButtonItem *)sender {
+    (void)sender;
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc]
+        initForOpeningContentTypes:@[UTTypeItem] asCopy:NO];
+    picker.delegate = self; picker.allowsMultipleSelection = NO;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    (void)controller;
+    NSURL *url = urls.firstObject; if (!url) return;
+    self.chooseButton.enabled = NO;
+    self.report[@"disc_loader"] = @{@"status":@"loading",@"executed":@NO};
+    [self refreshText];
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0), ^{
+        BOOL scoped = [url startAccessingSecurityScopedResource];
+        __block MemoriesMemory *candidate = calloc(1,sizeof(MemoriesMemory));
+        __block LekakDiscResult result = {0};
+        __block BOOL loaded = NO;
+        NSError *coordinationError = nil;
+        if (candidate) {
+            NSFileCoordinator *coordinator = [[NSFileCoordinator alloc] initWithFilePresenter:nil];
+            [coordinator coordinateReadingItemAtURL:url options:0 error:&coordinationError byAccessor:^(NSURL *readURL) {
+                FILE *file = fopen(readURL.fileSystemRepresentation,"rb");
+                loaded = LekakDisc_Load(file,candidate,&result);
+                if (file) fclose(file);
+            }];
+        } else snprintf(result.error,sizeof(result.error),"Guest RAM allocation failed");
+        if (scoped) [url stopAccessingSecurityScopedResource];
+        NSString *error = coordinationError ? @"Impossible de lire ce fichier. Télécharge-le dans Fichiers puis réessaie." :
+            [NSString stringWithUTF8String:result.error];
+        NSDictionary *details = loaded ? @{@"status":@"loaded",@"loaded":@YES,@"executed":@NO,
+            @"sector_bytes":@(result.sector_bytes),@"executable_bytes":@(result.executable_bytes),
+            @"load_bytes":@(result.load_bytes),
+            @"load_address":[NSString stringWithFormat:@"%08X",result.load_address],
+            @"entry":[NSString stringWithFormat:@"%08X",result.entry],
+            @"gp":[NSString stringWithFormat:@"%08X",result.gp],
+            @"stack_base":[NSString stringWithFormat:@"%08X",result.stack_base],
+            @"payload_hash":[NSString stringWithFormat:@"%08X",result.payload_hash]} :
+            @{@"status":@"failed",@"loaded":@NO,@"executed":@NO,@"error":error ?: @"Lecture impossible"};
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (loaded) { free(self->_discMemory); self->_discMemory=candidate; }
+            else free(candidate);
+            self.report[@"disc_loader"] = details;
+            self.chooseButton.enabled = YES;
+            [self refreshText];
+        });
+    });
 }
 - (void)shareReport:(UIBarButtonItem *)sender {
     NSData *data = [NSJSONSerialization dataWithJSONObject:self.report options:NSJSONWritingPrettyPrinted error:NULL];
