@@ -26,6 +26,11 @@ def build():
     result={'supported':check.returncode==0,'exit_code':check.returncode,
             'compiler':version.stdout.strip(),'log':check.stdout,
             'test':'Eight-byte record with two G32 pointers, native-to-G32 stores, and G32 callback invocation.'}
+    host_tests=run([sys.executable,str(ROOT/'tools/test_engine_host.py')])
+    result['engine_host_tests']={'passed':host_tests.returncode==0,'log':host_tests.stdout}
+    if host_tests.returncode:
+        (destination/'build-log.txt').write_text(host_tests.stdout)
+        raise SystemExit('Engine host tests failed:\n'+host_tests.stdout)
     result['app_compiler']=run([cc,'--version']).stdout.strip()
     result['engine_header']='Original src/port_ptr.h; stored pointer layout, field offset, indexed store, byte load/store and callback lowering checked.'
     if check.returncode==0:
@@ -42,8 +47,20 @@ def build():
     info['DTPlatformName']='iphoneos'
     (app/'Info.plist').write_bytes(plistlib.dumps(info))
     shutil.copy2(destination/'compiler-check.json',app/'compiler-check.json')
-    command=[cc,*flags,'-fobjc-arc','-fblocks','-O2','-Wall','-Wextra',str(ROOT/'App/main.m'),
-             '-framework','UIKit','-framework','Foundation','-o',str(app/'LekakProbe')]
+    sources=[str(ROOT/p) for p in [
+        'App/engine_bridge.c','App/engine_callbacks.c','App/optional_textures.c','Engine/src/pc/memory.c',
+        'Engine/src/pc/rng.c','Engine/src/pc/compat/libgs_ot.c','Engine/src/pc/compat/gte.c',
+        'Engine/src/pc/compat/pgxp.c','Engine/src/pc/render/packets.c','Engine/src/pc/render/soft_gpu.c']]
+    objects=[]
+    for index,source in enumerate(sources):
+        obj=destination/f'engine-{index}.o'
+        compiled=run([cc,*flags,'-std=c11','-O2','-Wall','-I'+str(ROOT/'Engine/src'),'-c',source,'-o',str(obj)])
+        if compiled.returncode:
+            (destination/'build-log.txt').write_text(compiled.stdout)
+            raise SystemExit('Engine component compile failed: '+source+'\n'+compiled.stdout)
+        objects.append(str(obj))
+    command=[cc,*flags,'-fobjc-arc','-fblocks','-O2','-Wall','-Wextra',str(ROOT/'App/main.m'),*objects,
+             '-framework','UIKit','-framework','Foundation','-framework','CoreGraphics','-o',str(app/'LekakProbe')]
     built=run(command)
     (destination/'build-log.txt').write_text(built.stdout)
     if built.returncode:raise SystemExit('The diagnostic app did not compile:\n'+built.stdout)

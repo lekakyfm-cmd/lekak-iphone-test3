@@ -5,6 +5,7 @@
 #import <unistd.h>
 #import <string.h>
 #import "address_adapter.h"
+#import "engine_bridge.h"
 
 /* This is a device compatibility probe, not the Lekak game. No ROM data,
  * dynamic executable allocation, code patching, or MAP_FIXED is used. */
@@ -70,6 +71,33 @@ static NSDictionary *CheckTranslation(void) {
     return result;
 }
 
+static NSDictionary *CheckEngine(void) {
+    LekakEngineResult r;
+    BOOL passed = LekakEngine_Run(&r);
+    return @{@"passed": @(passed), @"allocation": @(r.allocation),
+        @"ram_aliases": @(r.memory_aliases), @"scratchpad_aliases": @(r.scratchpad_aliases),
+        @"span_rejection": @(r.rejected_spans), @"ordering_table": @(r.ordering_table),
+        @"packet_collection": @(r.packet_collection), @"packet_validation": @(r.packet_validation),
+        @"software_gpu_pixels": @(r.rendered_pixels), @"gpu_invalid_rejection": @(r.gpu_invalid_rejection),
+        @"callback_bank_dispatch": @(r.callback_bank_dispatch), @"rng": @(r.rng), @"gte_register_roundtrip": @(r.gte), @"snapshot_words": @(r.snapshot_words),
+        @"framebuffer_hash": [NSString stringWithFormat:@"%08X", r.framebuffer_hash],
+        @"red_pixel": @(r.red_pixel), @"blue_pixel": @(r.blue_pixel), @"violet_pixel": @(r.violet_pixel),
+        @"scope": @"Genuine engine memory, OT, packets, software GPU, GTE and RNG; synthetic fixture. No game loop, disc or mod hooks.",
+        @"disabled_optional_services": @[@"Texture dump", @"Texture replacement packs"]};
+}
+static UIImage *EnginePreview(void) {
+    NSMutableData *rgba = [NSMutableData dataWithLength:320*240*4];
+    LekakEngine_CopyRGBA(rgba.mutableBytes);
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData((__bridge CFDataRef)rgba);
+    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+    CGImageRef frame = CGImageCreate(320, 240, 8, 32, 320*4, space,
+        (CGBitmapInfo)kCGImageAlphaLast, provider, NULL, NO, kCGRenderingIntentDefault);
+    UIImage *image = frame ? [UIImage imageWithCGImage:frame] : nil;
+    if (frame) CGImageRelease(frame);
+    CGColorSpaceRelease(space); CGDataProviderRelease(provider);
+    return image;
+}
+
 static NSDictionary *CompilerCheck(void) {
     NSString *path = [[NSBundle mainBundle] pathForResource:@"compiler-check" ofType:@"json"];
     NSData *data = path ? [NSData dataWithContentsOfFile:path] : nil;
@@ -85,28 +113,36 @@ static NSDictionary *CompilerCheck(void) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = UIColor.systemBackgroundColor;
-    self.title = @"Lekak — essai 3";
+    self.title = @"Lekak — moteur 4";
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
         initWithTitle:@"Partager" style:UIBarButtonItemStylePlain target:self action:@selector(shareReport:)];
     NSArray *mappings = @[CheckMapping(0x80000000u, 0x200000u),
                            CheckMapping(0x9F800000u, (size_t)sysconf(_SC_PAGESIZE)),
                            CheckMapping(0xC0000000u, (size_t)sysconf(_SC_PAGESIZE))];
     NSDictionary *translation = CheckTranslation();
+    NSDictionary *engine = CheckEngine();
     uintptr_t function = (uintptr_t)&CheckMapping;
-    self.report = @{@"probe_version": @3, @"is_game": @NO,
+    self.report = @{@"probe_version": @4, @"is_game": @NO,
         @"system_version": UIDevice.currentDevice.systemVersion,
         @"device_model": UIDevice.currentDevice.model,
         @"native_pointer_bytes": @(sizeof(void *)),
         @"native_function_address": [NSString stringWithFormat:@"0x%llX", (unsigned long long)function],
         @"native_function_fits_32bits": @(function <= UINT32_MAX),
-        @"address_adapter": translation, @"compiler": CompilerCheck(), @"memory_tests": mappings,
+        @"engine_core": engine, @"address_adapter": translation, @"compiler": CompilerCheck(), @"memory_tests": mappings,
         @"runtime_code_patching": @"Not attempted. The engine needs static dispatch on iOS.",
         @"scope": @"Compatibility diagnostics only. No game engine or disc included."};
     NSMutableString *text = [NSMutableString stringWithString:
-        @"TROISIEME ESSAI iOS — ADRESSES TRADUITES\n\nCette application vérifie les obstacles au portage. Elle ne lance pas encore le jeu.\n\n"];
+        @"QUATRIEME ESSAI iOS — COMPOSANTS DU MOTEUR\n\nCette application vérifie les obstacles au portage. Elle ne lance pas encore le jeu.\n\n"];
     [text appendFormat:@"iOS : %@\nPointeurs natifs : %zu octets\nCompilateur compatible avec les pointeurs 32 bits : %@\n\n",
         UIDevice.currentDevice.systemVersion, sizeof(void *),
         [CompilerCheck()[@"supported"] boolValue] ? @"oui" : @"non"];
+    [text appendFormat:@"Composants du moteur : %@\nRendu GPU : %@\nMemoire RAM et miroirs : %@\nGeometrie GTE : %@\nGenerateur aleatoire : %@\nEmpreinte image : %@\n\n",
+        [engine[@"passed"] boolValue] ? @"OK" : @"ECHEC",
+        [engine[@"software_gpu_pixels"] boolValue] ? @"OK" : @"ECHEC",
+        [engine[@"ram_aliases"] boolValue] ? @"OK" : @"ECHEC",
+        [engine[@"gte_register_roundtrip"] boolValue] ? @"OK" : @"ECHEC",
+        [engine[@"rng"] boolValue] ? @"OK" : @"ECHEC", engine[@"framebuffer_hash"]];
+    [text appendString:@"Le rendu ci-dessous vient du GPU logiciel du moteur. Les trois rectangles sont des commandes de test, pas un ecran du jeu. La boucle de jeu et les hooks Lekak restent a convertir.\n\n"];
     [text appendFormat:@"Adaptation des adresses : %@\nMemoire traduite : %@\nAppels de fonctions : %@\nControle des limites : %@\n\n",
         [translation[@"passed"] boolValue] ? @"REUSSIE" : @"ECHEC",
         [translation[@"translated_memory_roundtrip"] boolValue] ? @"OK" : @"ECHEC",
@@ -123,7 +159,14 @@ static NSDictionary *CompilerCheck(void) {
     view.translatesAutoresizingMaskIntoConstraints = NO;
     view.editable = NO;
     view.font = [UIFont systemFontOfSize:16];
-    view.text = text;
+    NSMutableAttributedString *content = [[NSMutableAttributedString alloc] initWithString:text
+        attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:16], NSForegroundColorAttributeName: UIColor.labelColor}];
+    NSTextAttachment *preview = [NSTextAttachment new];
+    preview.image = EnginePreview();
+    preview.bounds = CGRectMake(0, 0, 280, 210);
+    [content appendAttributedString:[NSAttributedString attributedStringWithAttachment:preview]];
+    [content appendAttributedString:[[NSAttributedString alloc] initWithString:@"\nRendu du moteur — fixture de test\n"]];
+    view.attributedText = content;
     view.textContainerInset = UIEdgeInsetsMake(18, 18, 24, 18);
     [self.view addSubview:view];
     [NSLayoutConstraint activateConstraints:@[
