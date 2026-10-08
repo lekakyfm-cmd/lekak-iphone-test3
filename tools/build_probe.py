@@ -59,7 +59,7 @@ def build():
             (destination/'build-log.txt').write_text(compiled.stdout)
             raise SystemExit('Engine component compile failed: '+source+'\n'+compiled.stdout)
         objects.append(str(obj))
-    command=[cc,*flags,'-fobjc-arc','-fblocks','-O2','-Wall','-Wextra',str(ROOT/'App/main.m'),*objects,
+    command=[cc,*flags,'-I'+str(ROOT/'Engine/src'),'-fobjc-arc','-fblocks','-O2','-Wall','-Wextra',str(ROOT/'App/main.m'),*objects,
              '-framework','UIKit','-framework','Foundation','-framework','CoreGraphics','-framework','UniformTypeIdentifiers','-o',str(app/'LekakProbe')]
     built=run(command)
     (destination/'build-log.txt').write_text(built.stdout)
