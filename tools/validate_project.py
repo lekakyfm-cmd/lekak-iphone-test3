@@ -10,6 +10,7 @@ audit=json.loads((root/'engine-audit.json').read_text())
 assert not audit['built_ios_app'] and not audit['tested_on_iphone']
 main=(root/'App/main.m').read_text()
 assert 'MAP_FIXED,' not in main and 'mprotect(' not in main
+assert 'CheckTranslation' in main and 'address_adapter' in main
 assert 'native_function_fits_32bits' in main and 'UIApplicationMain' in main
 if '--built' in sys.argv:
     app=root/'build/Payload/LekakProbe.app';binary=(app/'LekakProbe').read_bytes()
