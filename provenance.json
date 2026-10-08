@@ -1,0 +1,71 @@
+{
+  "repository": "https://github.com/Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled",
+  "revision": "0d78202729967a5bbdbc886aa128e48e82bef7ac",
+  "scope": "Unmodified portable memory, ordering tables, GPU command parser, software renderer, GTE and RNG. No resident game loop, assets or mod hooks yet.",
+  "files": [
+    {
+      "path": "src/pc/memory.c",
+      "sha256": "b69df03f4e11a37af52056b61f003ac5115fafe5e758fefc64adefb35e39a067"
+    },
+    {
+      "path": "src/pc/memory.h",
+      "sha256": "2ab5ca2a2a45fb953bdae2a949fba91622d6c2c26e30c0dfa6550ac083c1064a"
+    },
+    {
+      "path": "src/pc/rng.c",
+      "sha256": "17876594c383fff6cdb0ab0ca8a0a9f9b7becb53e78808781b335648c011440f"
+    },
+    {
+      "path": "src/pc/rng.h",
+      "sha256": "2221f2b140de5e8dce9349c586c6798101ff107f34eae855d7851d84524c512e"
+    },
+    {
+      "path": "src/pc/render/packets.c",
+      "sha256": "d4b5608d8f9a5d8c82d8aee80d046f9fb3885bf470f45d673375a7e619ee25f9"
+    },
+    {
+      "path": "src/pc/render/packets.h",
+      "sha256": "d76c8842e3c91bb41913c0bf9a84f4979bc1d2e5c1ce232e314ce93cd3345a63"
+    },
+    {
+      "path": "src/pc/render/soft_gpu.c",
+      "sha256": "f3a04d59229bc4f46660b822401345f347844e864acacaa6eb0a879aa93514bb"
+    },
+    {
+      "path": "src/pc/render/soft_gpu.h",
+      "sha256": "a487baa35d4a613129f275b30c5112d8bec282375aee1dcbc199c004ac7e1839"
+    },
+    {
+      "path": "src/pc/render/texture_dump.h",
+      "sha256": "d6a19a3805320b45344f09b6f980ced7a62886b94621d0b96468136601c5a622"
+    },
+    {
+      "path": "src/pc/compat/libgs_ot.c",
+      "sha256": "b0d9c7d01d58436e86b7850eacac7adcbaa5f256139aede834e59aefd2cd286c"
+    },
+    {
+      "path": "src/pc/compat/libgs_ot.h",
+      "sha256": "e3e9e0381a1618c5a941992e852ea956200e27964b5c4336559adaa81aa2b412"
+    },
+    {
+      "path": "src/pc/compat/gte.c",
+      "sha256": "57ffb51e1d3c35a332f045baac2a75e79742d6a0841312e2eaa1c30103a4da1c"
+    },
+    {
+      "path": "src/pc/compat/gte.h",
+      "sha256": "7ec2d8c3a55a56e8ac4d6b126914009c8ad52f94adb2db24157968d077c2d1e7"
+    },
+    {
+      "path": "src/pc/compat/pgxp.c",
+      "sha256": "f2ca2881a963c6bc5445bd5c995f2d6c0e1ad4093564046da5f4c040756a6f9c"
+    },
+    {
+      "path": "src/pc/compat/pgxp.h",
+      "sha256": "60558e4b337c03b0082f5ece506f1052dcc43da88773ab274ed56b18d6bd2894"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "615089fef53cd6d3609ecb03c5bbbd0a600570c8c0ea4cdf0be3d13bb272360a"
+    }
+  ]
+}

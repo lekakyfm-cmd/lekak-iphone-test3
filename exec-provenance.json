@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled",
+  "revision": "0d78202729967a5bbdbc886aa128e48e82bef7ac",
+  "original": "src/pc/guest/mips.c",
+  "original_sha256": "1839382959302aeae158ee6ea1bc415185cacc41e4e77778c0074155f1fccb2e",
+  "adapted": "App/guest_exec.c",
+  "license": "Upstream PC-port MIT license, Engine/LICENSE",
+  "changes": [
+    "Explicit checked guest-memory translation",
+    "Removed native casts, mapped stack, OS crash/fault handling, JIT and external callbacks",
+    "Bounded instruction trace and structured stop reason",
+    "MIPS-I branch/load delays and trapping overflow; unsupported BIOS/MMIO/COP0 halt",
+    "No complete PS1 hardware, cycle timing or full-game claim"
+  ]
+}
